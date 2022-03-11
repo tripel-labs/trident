@@ -1,5 +1,6 @@
 import { ChainId, WETH9_ADDRESS, USDC_ADDRESS, WNATIVE_ADDRESS } from "@sushiswap/core-sdk";
 import { task, types } from "hardhat/config";
+// @ts-ignore
 import { ConstantProductPoolFactory, MasterDeployer } from "../types";
 
 task("cpp-deploy", "Constant Product Pool deploy")

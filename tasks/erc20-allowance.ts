@@ -1,3 +1,4 @@
+// @ts-ignore
 import type { ERC20Mock } from "../types";
 import { task } from "hardhat/config";
 

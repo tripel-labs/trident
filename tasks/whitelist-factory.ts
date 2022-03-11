@@ -1,4 +1,5 @@
 import { BENTOBOX_ADDRESS } from "@sushiswap/core-sdk";
+// @ts-ignore
 import type { MasterDeployer } from "../types";
 import { task } from "hardhat/config";
 

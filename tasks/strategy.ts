@@ -1,4 +1,5 @@
 import { BENTOBOX_ADDRESS, ChainId, WETH9_ADDRESS } from "@sushiswap/core-sdk";
+// @ts-ignore
 import type { BentoBoxV1, BentoBoxV1__factory } from "../types";
 
 import { task } from "hardhat/config";

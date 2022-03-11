@@ -1,5 +1,5 @@
+// @ts-ignore
 import type { BentoBoxV1, BentoBoxV1__factory, TridentRouter } from "../types";
-
 import { BENTOBOX_ADDRESS } from "@sushiswap/core-sdk";
 import { task } from "hardhat/config";
 

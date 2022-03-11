@@ -1,4 +1,5 @@
 import { BENTOBOX_ADDRESS, ChainId, USDC_ADDRESS, WETH9_ADDRESS } from "@sushiswap/core-sdk";
+// @ts-ignore
 import type { BentoBoxV1, BentoBoxV1__factory, ERC20Mock, TridentRouter } from "../types";
 import { task, types } from "hardhat/config";
 

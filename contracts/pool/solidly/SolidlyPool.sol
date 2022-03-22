@@ -8,7 +8,7 @@ import {IBentoBoxMinimal} from "../../interfaces/IBentoBoxMinimal.sol";
 import {IMasterDeployer} from "../../interfaces/IMasterDeployer.sol";
 import {IPool} from "../../interfaces/IPool.sol";
 
-contract SolidlyPool is ERC20, ReentrancyGuard {
+contract SolidlyPool is IPool, ERC20, ReentrancyGuard {
     uint256 internal constant MINIMUM_LIQUIDITY = 10**3;
 
     address public immutable token0;
@@ -23,10 +23,14 @@ contract SolidlyPool is ERC20, ReentrancyGuard {
     uint128 public reserve0;
     uint128 public reserve1;
 
+    error NotSupported();
+
     event Mint(address indexed sender, uint256 amount0, uint256 amount1, address indexed recipient);
     event Burn(address indexed sender, uint256 amount0, uint256 amount1, address indexed to);
     event Swap(address indexed sender, uint256 amount0In, uint256 amount1In, uint256 amount0Out, uint256 amount1Out, address indexed to);
     event Sync(uint256 reserve0, uint256 reserve1);
+
+    bytes32 public constant override poolIdentifier = "Trident:SolidlyPool";
 
     constructor(bytes memory _deployData, IMasterDeployer _masterDeployer) ERC20("", "SLP", 18) {
         (address _token0, address _token1) = abi.decode(_deployData, (address, address));
@@ -42,8 +46,10 @@ contract SolidlyPool is ERC20, ReentrancyGuard {
         masterDeployer = _masterDeployer;
     }
 
-    function tokens() external view returns (address, address) {
-        return (token0, token1);
+    function getAssets() public view override returns (address[] memory assets) {
+        assets = new address[](2);
+        assets[0] = token0;
+        assets[1] = token1;
     }
 
     function getReserves() public view returns (uint256 _reserve0, uint256 _reserve1) {
@@ -79,7 +85,8 @@ contract SolidlyPool is ERC20, ReentrancyGuard {
         emit Mint(msg.sender, amount0, amount1, recipient);
     }
 
-    function burn(address to) external nonReentrant returns (uint256 amount0, uint256 amount1) {
+    function burn(bytes calldata data) external override nonReentrant returns (IPool.TokenAmount[] memory withdrawnAmounts) {
+        address to = abi.decode(data, (address));
         (address _token0, address _token1) = (token0, token1);
         (uint256 balance0, uint256 balance1) = _balance();
         uint256 _liquidity = balanceOf[address(this)];
@@ -87,8 +94,8 @@ contract SolidlyPool is ERC20, ReentrancyGuard {
         // todo mintFee
 
         uint256 _totalSupply = totalSupply; // gas savings, must be defined here since totalSupply can update in _mintFee
-        amount0 = (_liquidity * balance0) / _totalSupply; // using balances ensures pro-rata distribution
-        amount1 = (_liquidity * balance1) / _totalSupply; // using balances ensures pro-rata distribution
+        uint256 amount0 = (_liquidity * balance0) / _totalSupply; // using balances ensures pro-rata distribution
+        uint256 amount1 = (_liquidity * balance1) / _totalSupply; // using balances ensures pro-rata distribution
 
         _burn(address(this), _liquidity);
         _transferShares(_token0, amount0, to, false);
@@ -100,11 +107,15 @@ contract SolidlyPool is ERC20, ReentrancyGuard {
             balance1 -= amount1;
         }
 
+        withdrawnAmounts = new TokenAmount[](2);
+        withdrawnAmounts[0] = TokenAmount({token: address(token0), amount: amount0});
+        withdrawnAmounts[1] = TokenAmount({token: address(token1), amount: amount1});
+
         _update(balance0, balance1);
         emit Burn(msg.sender, amount0, amount1, to);
     }
 
-    function swap(bytes calldata data) external nonReentrant returns (uint256 amountOut) {
+    function swap(bytes calldata data) external override nonReentrant returns (uint256 amountOut) {
         (bool zeroForOne, address recipient) = abi.decode(data, (bool, address));
         (address _token0, address _token1) = (token0, token1);
         (uint128 _reserve0, uint128 _reserve1) = (reserve0, reserve1);
@@ -113,7 +124,6 @@ contract SolidlyPool is ERC20, ReentrancyGuard {
 
         (uint256 balance0, uint256 balance1) = _balance();
         uint256 amountIn;
-        address tokenOut;
 
         if (zeroForOne) {
             amountIn = balance0 - _reserve0;
@@ -125,10 +135,17 @@ contract SolidlyPool is ERC20, ReentrancyGuard {
             balance0 -= amountOut;
         }
 
-        _transferShares(tokenOut, amountOut, recipient, false);
+        _transferShares(zeroForOne ? token1 : token0, amountOut, recipient, false);
         _update(balance0, balance1);
 
-        // todo emit IPool.Swap event
+        emit Swap(recipient, zeroForOne ? token0 : token1, zeroForOne ? token1 : token0, amountIn, amountOut);
+    }
+
+    function getAmountOut(bytes calldata data) public view override returns (uint256 finalAmountOut) {
+        (address tokenIn, uint256 amountIn) = abi.decode(data, (address, uint256));
+        (uint256 _reserve0, uint256 _reserve1) = (reserve0, reserve1);
+        amountIn -= amountIn / 10000; // remove fee from amount received
+        finalAmountOut = _getAmountOut(amountIn, tokenIn, _reserve0, _reserve1);
     }
 
     function getAmountOut(uint256 amountIn, address tokenIn) external view returns (uint256) {
@@ -238,5 +255,17 @@ contract SolidlyPool is ERC20, ReentrancyGuard {
     function _balance() internal view returns (uint256 balance0, uint256 balance1) {
         balance0 = bento.balanceOf(token0, address(this));
         balance1 = bento.balanceOf(token1, address(this));
+    }
+
+    function getAmountIn(bytes calldata) public pure override returns (uint256) {
+        revert NotSupported();
+    }
+
+    function flashSwap(bytes calldata) public pure override returns (uint256) {
+        revert NotSupported();
+    }
+
+    function burnSingle(bytes calldata) public pure override returns (uint256) {
+        revert NotSupported();
     }
 }

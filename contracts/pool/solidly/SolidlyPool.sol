@@ -5,6 +5,7 @@ pragma solidity >=0.8.0;
 import {ERC20} from "@rari-capital/solmate/src/tokens/ERC20.sol";
 import {ReentrancyGuard} from "@rari-capital/solmate/src/utils/ReentrancyGuard.sol";
 import {IBentoBoxMinimal} from "../../interfaces/IBentoBoxMinimal.sol";
+import {ISolidlyPoolFactory} from "../../interfaces/ISolidlyPoolFactory.sol";
 import {IMasterDeployer} from "../../interfaces/IMasterDeployer.sol";
 import {IPool} from "../../interfaces/IPool.sol";
 
@@ -32,7 +33,9 @@ contract SolidlyPool is IPool, ERC20, ReentrancyGuard {
 
     bytes32 public constant override poolIdentifier = "Trident:SolidlyPool";
 
-    constructor(bytes memory _deployData, IMasterDeployer _masterDeployer) ERC20("", "SLP", 18) {
+    constructor() ERC20("", "SLP", 18) {
+        (bytes memory _deployData, IMasterDeployer _masterDeployer) = ISolidlyPoolFactory(msg.sender).getDeployData();
+
         (address _token0, address _token1) = abi.decode(_deployData, (address, address));
 
         (token0, token1) = (_token0, _token1);

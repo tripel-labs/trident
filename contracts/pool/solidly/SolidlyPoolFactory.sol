@@ -8,7 +8,7 @@ import {IMasterDeployer} from "../../interfaces/IMasterDeployer.sol";
 import {ISolidlyPoolFactory} from "../../interfaces/ISolidlyPoolFactory.sol";
 
 /// @notice Contract for deploying Trident Solidly Pool with configurations.
-contract ConstantProductPoolFactory is ISolidlyPoolFactory, PoolDeployer {
+contract SolidlyPoolFactory is ISolidlyPoolFactory, PoolDeployer {
     bytes32 public constant bytecodeHash = keccak256(type(SolidlyPool).creationCode);
 
     bytes private cachedDeployData;

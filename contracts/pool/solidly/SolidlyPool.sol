@@ -8,6 +8,7 @@ import {IBentoBoxMinimal} from "../../interfaces/IBentoBoxMinimal.sol";
 import {ISolidlyPoolFactory} from "../../interfaces/ISolidlyPoolFactory.sol";
 import {IMasterDeployer} from "../../interfaces/IMasterDeployer.sol";
 import {IPool} from "../../interfaces/IPool.sol";
+import {TridentMath} from "../../libraries/TridentMath.sol";
 
 contract SolidlyPool is IPool, ERC20, ReentrancyGuard {
     uint256 internal constant MINIMUM_LIQUIDITY = 10**3;
@@ -23,6 +24,11 @@ contract SolidlyPool is IPool, ERC20, ReentrancyGuard {
 
     uint128 public reserve0;
     uint128 public reserve1;
+
+    address public feeTo;
+    uint256 public kLast;
+    uint256 public barFee;
+    address public barFeeTo;
 
     error NotSupported();
 
@@ -46,6 +52,9 @@ contract SolidlyPool is IPool, ERC20, ReentrancyGuard {
         decimals1 = 10**ERC20(_token1).decimals();
 
         bento = IBentoBoxMinimal(_masterDeployer.bento());
+        barFee = _masterDeployer.barFee();
+        barFeeTo = _masterDeployer.barFeeTo();
+
         masterDeployer = _masterDeployer;
     }
 
@@ -142,6 +151,26 @@ contract SolidlyPool is IPool, ERC20, ReentrancyGuard {
         _update(balance0, balance1);
 
         emit Swap(recipient, zeroForOne ? token0 : token1, zeroForOne ? token1 : token0, amountIn, amountOut);
+    }
+
+    function _mintFee(uint112 _reserve0, uint112 _reserve1) internal returns (uint256 _totalSupply, uint256 computed) {
+        _totalSupply = totalSupply;
+        uint256 _kLast = kLast;
+        if (_kLast != 0) {
+            computed = TridentMath.sqrt(TridentMath.sqrt(_kFromShares(_reserve0, _reserve1)) * 1e18);
+            if (computed > _kLast) {
+                // `barFee` % of increase in liquidity.
+                uint256 _barFee = barFee;
+                uint256 numerator = _totalSupply * (computed - _kLast) * _barFee;
+                uint256 denominator = (10000 - _barFee) * computed + _barFee * _kLast;
+                uint256 liquidity = numerator / denominator;
+
+                if (liquidity != 0) {
+                    _mint(barFeeTo, liquidity);
+                    _totalSupply += liquidity;
+                }
+            }
+        }
     }
 
     function getAmountOut(bytes calldata data) public view override returns (uint256 finalAmountOut) {

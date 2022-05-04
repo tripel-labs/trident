@@ -82,30 +82,31 @@ contract SolidlyPool is IPool, ERC20, ReentrancyGuard {
         uint256 amount0 = balance0 - _reserve0;
         uint256 amount1 = balance1 - _reserve1;
 
-        // todo mintFee
+        (uint256 _totalSupply, ) = _mintFee(_reserve0, _reserve1);
 
-        uint256 _totalSupply = totalSupply;
         if (_totalSupply == 0) {
             liquidity = _kFromShares(amount0, amount1) - MINIMUM_LIQUIDITY;
             _mint(address(0), MINIMUM_LIQUIDITY);
         } else {
-            // todo uneven mint
             liquidity = _min((amount0 * _totalSupply) / _reserve0, (amount1 * _totalSupply) / _reserve1);
         }
+
         _mint(recipient, liquidity);
         _update(balance0, balance1);
+        kLast = _fourthRootK(balance0, balance1);
+
         emit Mint(msg.sender, amount0, amount1, recipient);
     }
 
     function burn(bytes calldata data) external override nonReentrant returns (IPool.TokenAmount[] memory withdrawnAmounts) {
         address to = abi.decode(data, (address));
+        (uint256 _reserve0, uint256 _reserve1) = (reserve0, reserve1);
         (address _token0, address _token1) = (token0, token1);
         (uint256 balance0, uint256 balance1) = _balance();
         uint256 _liquidity = balanceOf[address(this)];
 
-        // todo mintFee
+        (uint256 _totalSupply, ) = _mintFee(_reserve0, _reserve1);
 
-        uint256 _totalSupply = totalSupply; // gas savings, must be defined here since totalSupply can update in _mintFee
         uint256 amount0 = (_liquidity * balance0) / _totalSupply; // using balances ensures pro-rata distribution
         uint256 amount1 = (_liquidity * balance1) / _totalSupply; // using balances ensures pro-rata distribution
 
@@ -124,6 +125,8 @@ contract SolidlyPool is IPool, ERC20, ReentrancyGuard {
         withdrawnAmounts[1] = TokenAmount({token: address(token1), amount: amount1});
 
         _update(balance0, balance1);
+        kLast = _fourthRootK(balance0, balance1);
+
         emit Burn(msg.sender, amount0, amount1, to);
     }
 
@@ -139,11 +142,13 @@ contract SolidlyPool is IPool, ERC20, ReentrancyGuard {
 
         if (zeroForOne) {
             amountIn = balance0 - _reserve0;
+            amountIn -= amountIn / 10000;
             amountOut = _getAmountOutFromShares(amountIn, _token0, _reserve0, _reserve1);
             balance1 -= amountOut;
         } else {
             amountIn = balance1 - _reserve1;
-            amountOut = _getAmountOutFromShares(amountIn, _token1, _reserve1, _reserve0);
+            amountIn -= amountIn / 10000;
+            amountOut = _getAmountOutFromShares(amountIn, _token1, _reserve0, _reserve1);
             balance0 -= amountOut;
         }
 
@@ -153,11 +158,12 @@ contract SolidlyPool is IPool, ERC20, ReentrancyGuard {
         emit Swap(recipient, zeroForOne ? token0 : token1, zeroForOne ? token1 : token0, amountIn, amountOut);
     }
 
-    function _mintFee(uint112 _reserve0, uint112 _reserve1) internal returns (uint256 _totalSupply, uint256 computed) {
+    // Mints LP tokens according to the difference between kLast and current reserves.
+    function _mintFee(uint256 _reserve0, uint256 _reserve1) internal returns (uint256 _totalSupply, uint256 computed) {
         _totalSupply = totalSupply;
         uint256 _kLast = kLast;
         if (_kLast != 0) {
-            computed = TridentMath.sqrt(TridentMath.sqrt(_kFromShares(_reserve0, _reserve1)) * 1e18);
+            computed = _fourthRootK(_reserve0, _reserve1);
             if (computed > _kLast) {
                 // `barFee` % of increase in liquidity.
                 uint256 _barFee = barFee;
@@ -171,6 +177,10 @@ contract SolidlyPool is IPool, ERC20, ReentrancyGuard {
                 }
             }
         }
+    }
+
+    function _fourthRootK(uint256 _reserve0, uint256 _reserve1) internal view returns (uint256) {
+        return TridentMath.sqrt(TridentMath.sqrt(_kFromShares(_reserve0, _reserve1)) * 1e18);
     }
 
     function getAmountOut(bytes calldata data) public view override returns (uint256 finalAmountOut) {
